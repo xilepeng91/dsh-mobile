@@ -8,9 +8,9 @@ import android.app.Service
 import android.content.Intent
 import android.os.IBinder
 import com.dsh.mobile.MainActivity
-import com.rementia.openwakeword.lib.DetectionMode
+import com.rementia.openwakeword.lib.model.DetectionMode
 import com.rementia.openwakeword.lib.WakeWordEngine
-import com.rementia.openwakeword.lib.WakeWordModel
+import com.rementia.openwakeword.lib.model.WakeWordModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
