@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#0D1B2A</color>
+    <string name="app_name">DSH Remote</string>
+    <string name="channel_desc">Notifications when tasks complete or need review</string>
+    <string name="channel_name">DSH Task Updates</string>
+    <style name="Theme.DSHMobile" parent="android:Theme.Material.NoActionBar"/>
+    <style name="zxing_CaptureTheme" parent="Theme.AppCompat.NoActionBar"/>
+</resources>

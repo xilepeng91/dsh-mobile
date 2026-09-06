@@ -1,0 +1,289 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.dsh.mobile"
+4    android:versionCode="61"
+5    android:versionName="2.5.1" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="29"
+9        android:targetSdkVersion="36" />
+10
+11    <uses-permission android:name="android.permission.INTERNET" />
+11-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:5:5-67
+11-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:5:22-64
+12    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+12-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:6:5-79
+12-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:6:22-76
+13    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+13-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:7:5-77
+13-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:7:22-74
+14    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+14-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:8:5-77
+14-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:8:22-74
+15    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+15-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:9:5-87
+15-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:9:22-84
+16    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+16-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:10:5-88
+16-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:10:22-85
+17    <uses-permission android:name="android.permission.CAMERA" />
+17-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:11:5-65
+17-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:11:22-62
+18    <!-- 语音输入：RecognizerIntent 系统语音识别需要录音权限 -->
+19    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+19-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:13:5-71
+19-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:13:22-68
+20    <!-- 应用内更新：PackageInstaller 会话安装兜底需要（同签名自更新通常无需授权） -->
+21    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+21-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:15:5-83
+21-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:15:22-80
+22
+23    <uses-feature
+23-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:17:5-85
+24        android:name="android.hardware.camera"
+24-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:17:19-57
+25        android:required="false" />
+25-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:17:58-82
+26
+27    <uses-permission android:name="android.permission.USE_BIOMETRIC" /> <!-- suppress DeprecatedClassUsageInspection -->
+27-->[androidx.biometric:biometric:1.1.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/5dbbfec592a48a9933ab9987a0c76f67/transformed/biometric-1.1.0/AndroidManifest.xml:24:5-72
+27-->[androidx.biometric:biometric:1.1.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/5dbbfec592a48a9933ab9987a0c76f67/transformed/biometric-1.1.0/AndroidManifest.xml:24:22-69
+28    <uses-permission android:name="android.permission.USE_FINGERPRINT" />
+28-->[androidx.biometric:biometric:1.1.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/5dbbfec592a48a9933ab9987a0c76f67/transformed/biometric-1.1.0/AndroidManifest.xml:27:5-74
+28-->[androidx.biometric:biometric:1.1.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/5dbbfec592a48a9933ab9987a0c76f67/transformed/biometric-1.1.0/AndroidManifest.xml:27:22-71
+29
+30    <permission
+30-->[androidx.core:core:1.17.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/e9006419fbb9d9c1f88d7df0af892920/transformed/core-1.17.0/AndroidManifest.xml:22:5-24:47
+31        android:name="com.dsh.mobile.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+31-->[androidx.core:core:1.17.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/e9006419fbb9d9c1f88d7df0af892920/transformed/core-1.17.0/AndroidManifest.xml:23:9-81
+32        android:protectionLevel="signature" />
+32-->[androidx.core:core:1.17.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/e9006419fbb9d9c1f88d7df0af892920/transformed/core-1.17.0/AndroidManifest.xml:24:9-44
+33
+34    <uses-permission android:name="com.dsh.mobile.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+34-->[androidx.core:core:1.17.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/e9006419fbb9d9c1f88d7df0af892920/transformed/core-1.17.0/AndroidManifest.xml:26:5-97
+34-->[androidx.core:core:1.17.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/e9006419fbb9d9c1f88d7df0af892920/transformed/core-1.17.0/AndroidManifest.xml:26:22-94
+35
+36    <uses-feature
+36-->[com.journeyapps:zxing-android-embedded:4.3.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/82a6be1b3c2a4721c0376354ce515542/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:28:5-30:36
+37        android:name="android.hardware.camera.front"
+37-->[com.journeyapps:zxing-android-embedded:4.3.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/82a6be1b3c2a4721c0376354ce515542/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:29:9-53
+38        android:required="false" /> <!-- TODO replace above two with next line after Android 4.2 -->
+38-->[com.journeyapps:zxing-android-embedded:4.3.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/82a6be1b3c2a4721c0376354ce515542/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:30:9-33
+39    <!-- <uses-feature android:name="android.hardware.camera.any"/> -->
+40    <uses-feature
+40-->[com.journeyapps:zxing-android-embedded:4.3.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/82a6be1b3c2a4721c0376354ce515542/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:33:5-35:36
+41        android:name="android.hardware.camera.autofocus"
+41-->[com.journeyapps:zxing-android-embedded:4.3.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/82a6be1b3c2a4721c0376354ce515542/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:34:9-57
+42        android:required="false" />
+42-->[com.journeyapps:zxing-android-embedded:4.3.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/82a6be1b3c2a4721c0376354ce515542/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:35:9-33
+43    <uses-feature
+43-->[com.journeyapps:zxing-android-embedded:4.3.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/82a6be1b3c2a4721c0376354ce515542/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:36:5-38:36
+44        android:name="android.hardware.camera.flash"
+44-->[com.journeyapps:zxing-android-embedded:4.3.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/82a6be1b3c2a4721c0376354ce515542/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:37:9-53
+45        android:required="false" />
+45-->[com.journeyapps:zxing-android-embedded:4.3.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/82a6be1b3c2a4721c0376354ce515542/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:38:9-33
+46    <uses-feature
+46-->[com.journeyapps:zxing-android-embedded:4.3.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/82a6be1b3c2a4721c0376354ce515542/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:39:5-41:36
+47        android:name="android.hardware.screen.landscape"
+47-->[com.journeyapps:zxing-android-embedded:4.3.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/82a6be1b3c2a4721c0376354ce515542/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:40:9-57
+48        android:required="false" />
+48-->[com.journeyapps:zxing-android-embedded:4.3.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/82a6be1b3c2a4721c0376354ce515542/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:41:9-33
+49    <uses-feature
+49-->[com.journeyapps:zxing-android-embedded:4.3.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/82a6be1b3c2a4721c0376354ce515542/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:42:5-44:36
+50        android:name="android.hardware.wifi"
+50-->[com.journeyapps:zxing-android-embedded:4.3.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/82a6be1b3c2a4721c0376354ce515542/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:43:9-45
+51        android:required="false" />
+51-->[com.journeyapps:zxing-android-embedded:4.3.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/82a6be1b3c2a4721c0376354ce515542/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:44:9-33
+52
+53    <application
+53-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:19:5-80:19
+54        android:name="com.dsh.mobile.DshApplication"
+54-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:20:9-39
+55        android:allowBackup="true"
+55-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:21:9-35
+56        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+56-->[androidx.core:core:1.17.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/e9006419fbb9d9c1f88d7df0af892920/transformed/core-1.17.0/AndroidManifest.xml:28:18-86
+57        android:debuggable="true"
+58        android:extractNativeLibs="false"
+59        android:icon="@mipmap/ic_launcher"
+59-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:22:9-43
+60        android:label="@string/app_name"
+60-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:23:9-41
+61        android:networkSecurityConfig="@xml/network_security_config"
+61-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:27:9-69
+62        android:roundIcon="@mipmap/ic_launcher_round"
+62-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:24:9-54
+63        android:supportsRtl="true"
+63-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:25:9-35
+64        android:theme="@style/Theme.DSHMobile" >
+64-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:26:9-47
+65        <activity
+65-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:30:9-39:20
+66            android:name="com.dsh.mobile.MainActivity"
+66-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:31:13-41
+67            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize"
+67-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:34:13-91
+68            android:exported="true"
+68-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:32:13-36
+69            android:windowSoftInputMode="adjustResize" >
+69-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:33:13-55
+70            <intent-filter>
+70-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:35:13-38:29
+71                <action android:name="android.intent.action.MAIN" />
+71-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:36:17-69
+71-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:36:25-66
+72
+73                <category android:name="android.intent.category.LAUNCHER" />
+73-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:37:17-77
+73-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:37:27-74
+74            </intent-filter>
+75        </activity>
+76
+77        <service
+77-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:41:9-44:40
+78            android:name="com.dsh.mobile.service.WakeWordService"
+78-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:42:13-52
+79            android:exported="false"
+79-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:44:13-37
+80            android:foregroundServiceType="microphone" />
+80-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:43:13-55
+81        <service
+81-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:46:9-49:40
+82            android:name="com.dsh.mobile.service.DshConnectionService"
+82-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:47:13-57
+83            android:exported="false"
+83-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:49:13-37
+84            android:foregroundServiceType="dataSync" />
+84-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:48:13-53
+85
+86        <!-- 桌面小部件：连接状态 4x1，点击拉起 App；状态由前台服务驱动 -->
+87        <receiver
+87-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:52:9-61:20
+88            android:name="com.dsh.mobile.service.DshRemoteWidget"
+88-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:53:13-52
+89            android:exported="false" >
+89-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:54:13-37
+90            <intent-filter>
+90-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:55:13-57:29
+91                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+91-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:56:17-84
+91-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:56:25-81
+92            </intent-filter>
+93
+94            <meta-data
+94-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:58:13-60:59
+95                android:name="android.appwidget.provider"
+95-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:59:17-58
+96                android:resource="@xml/dsh_widget_info" />
+96-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:60:17-56
+97        </receiver>
+98
+99        <!-- 扫码组件（zxing-android-embedded），使用 AppCompat 主题避免崩溃 -->
+100        <activity
+100-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:64:9-68:71
+101            android:name="com.journeyapps.barcodescanner.CaptureActivity"
+101-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:65:13-74
+102            android:clearTaskOnLaunch="true"
+102-->[com.journeyapps:zxing-android-embedded:4.3.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/82a6be1b3c2a4721c0376354ce515542/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:49:13-45
+103            android:screenOrientation="fullSensor"
+103-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:66:13-51
+104            android:stateNotNeeded="true"
+104-->[com.journeyapps:zxing-android-embedded:4.3.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/82a6be1b3c2a4721c0376354ce515542/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:51:13-42
+105            android:theme="@style/zxing_CaptureTheme"
+105-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:67:13-54
+106            android:windowSoftInputMode="stateAlwaysHidden" />
+106-->[com.journeyapps:zxing-android-embedded:4.3.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/82a6be1b3c2a4721c0376354ce515542/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:53:13-60
+107
+108        <!-- 应用内更新：下载的 APK 经 FileProvider 交给系统安装器 -->
+109        <provider
+110            android:name="androidx.core.content.FileProvider"
+110-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:72:13-62
+111            android:authorities="com.dsh.mobile.fileprovider"
+111-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:73:13-64
+112            android:exported="false"
+112-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:74:13-37
+113            android:grantUriPermissions="true" >
+113-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:75:13-47
+114            <meta-data
+114-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:76:13-78:54
+115                android:name="android.support.FILE_PROVIDER_PATHS"
+115-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:77:17-67
+116                android:resource="@xml/file_paths" />
+116-->/home/ubuntu/dsh-remote/app/src/main/AndroidManifest.xml:78:17-51
+117        </provider>
+118
+119        <activity
+119-->[androidx.compose.ui:ui-tooling-android:1.8.2] /home/ubuntu/.gradle/caches/8.14.3/transforms/78837a2ac72b5e190abe8f4dea60d48e/transformed/ui-tooling-release/AndroidManifest.xml:23:9-25:39
+120            android:name="androidx.compose.ui.tooling.PreviewActivity"
+120-->[androidx.compose.ui:ui-tooling-android:1.8.2] /home/ubuntu/.gradle/caches/8.14.3/transforms/78837a2ac72b5e190abe8f4dea60d48e/transformed/ui-tooling-release/AndroidManifest.xml:24:13-71
+121            android:exported="true" />
+121-->[androidx.compose.ui:ui-tooling-android:1.8.2] /home/ubuntu/.gradle/caches/8.14.3/transforms/78837a2ac72b5e190abe8f4dea60d48e/transformed/ui-tooling-release/AndroidManifest.xml:25:13-36
+122
+123        <provider
+123-->[androidx.emoji2:emoji2:1.4.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/fffa926fd9c657e6f1685e2a367e28de/transformed/emoji2-1.4.0/AndroidManifest.xml:24:9-32:20
+124            android:name="androidx.startup.InitializationProvider"
+124-->[androidx.emoji2:emoji2:1.4.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/fffa926fd9c657e6f1685e2a367e28de/transformed/emoji2-1.4.0/AndroidManifest.xml:25:13-67
+125            android:authorities="com.dsh.mobile.androidx-startup"
+125-->[androidx.emoji2:emoji2:1.4.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/fffa926fd9c657e6f1685e2a367e28de/transformed/emoji2-1.4.0/AndroidManifest.xml:26:13-68
+126            android:exported="false" >
+126-->[androidx.emoji2:emoji2:1.4.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/fffa926fd9c657e6f1685e2a367e28de/transformed/emoji2-1.4.0/AndroidManifest.xml:27:13-37
+127            <meta-data
+127-->[androidx.emoji2:emoji2:1.4.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/fffa926fd9c657e6f1685e2a367e28de/transformed/emoji2-1.4.0/AndroidManifest.xml:29:13-31:52
+128                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+128-->[androidx.emoji2:emoji2:1.4.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/fffa926fd9c657e6f1685e2a367e28de/transformed/emoji2-1.4.0/AndroidManifest.xml:30:17-75
+129                android:value="androidx.startup" />
+129-->[androidx.emoji2:emoji2:1.4.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/fffa926fd9c657e6f1685e2a367e28de/transformed/emoji2-1.4.0/AndroidManifest.xml:31:17-49
+130            <meta-data
+130-->[androidx.lifecycle:lifecycle-process:2.9.1] /home/ubuntu/.gradle/caches/8.14.3/transforms/6071af5a47d92c76d1630e4e5b49368b/transformed/lifecycle-process-2.9.1/AndroidManifest.xml:29:13-31:52
+131                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+131-->[androidx.lifecycle:lifecycle-process:2.9.1] /home/ubuntu/.gradle/caches/8.14.3/transforms/6071af5a47d92c76d1630e4e5b49368b/transformed/lifecycle-process-2.9.1/AndroidManifest.xml:30:17-78
+132                android:value="androidx.startup" />
+132-->[androidx.lifecycle:lifecycle-process:2.9.1] /home/ubuntu/.gradle/caches/8.14.3/transforms/6071af5a47d92c76d1630e4e5b49368b/transformed/lifecycle-process-2.9.1/AndroidManifest.xml:31:17-49
+133            <meta-data
+133-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/49f5b4f70e293164d9b5ed259c2251f3/transformed/profileinstaller-1.4.0/AndroidManifest.xml:29:13-31:52
+134                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+134-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/49f5b4f70e293164d9b5ed259c2251f3/transformed/profileinstaller-1.4.0/AndroidManifest.xml:30:17-85
+135                android:value="androidx.startup" />
+135-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/49f5b4f70e293164d9b5ed259c2251f3/transformed/profileinstaller-1.4.0/AndroidManifest.xml:31:17-49
+136        </provider>
+137
+138        <receiver
+138-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/49f5b4f70e293164d9b5ed259c2251f3/transformed/profileinstaller-1.4.0/AndroidManifest.xml:34:9-52:20
+139            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+139-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/49f5b4f70e293164d9b5ed259c2251f3/transformed/profileinstaller-1.4.0/AndroidManifest.xml:35:13-76
+140            android:directBootAware="false"
+140-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/49f5b4f70e293164d9b5ed259c2251f3/transformed/profileinstaller-1.4.0/AndroidManifest.xml:36:13-44
+141            android:enabled="true"
+141-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/49f5b4f70e293164d9b5ed259c2251f3/transformed/profileinstaller-1.4.0/AndroidManifest.xml:37:13-35
+142            android:exported="true"
+142-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/49f5b4f70e293164d9b5ed259c2251f3/transformed/profileinstaller-1.4.0/AndroidManifest.xml:38:13-36
+143            android:permission="android.permission.DUMP" >
+143-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/49f5b4f70e293164d9b5ed259c2251f3/transformed/profileinstaller-1.4.0/AndroidManifest.xml:39:13-57
+144            <intent-filter>
+144-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/49f5b4f70e293164d9b5ed259c2251f3/transformed/profileinstaller-1.4.0/AndroidManifest.xml:40:13-42:29
+145                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+145-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/49f5b4f70e293164d9b5ed259c2251f3/transformed/profileinstaller-1.4.0/AndroidManifest.xml:41:17-91
+145-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/49f5b4f70e293164d9b5ed259c2251f3/transformed/profileinstaller-1.4.0/AndroidManifest.xml:41:25-88
+146            </intent-filter>
+147            <intent-filter>
+147-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/49f5b4f70e293164d9b5ed259c2251f3/transformed/profileinstaller-1.4.0/AndroidManifest.xml:43:13-45:29
+148                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+148-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/49f5b4f70e293164d9b5ed259c2251f3/transformed/profileinstaller-1.4.0/AndroidManifest.xml:44:17-85
+148-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/49f5b4f70e293164d9b5ed259c2251f3/transformed/profileinstaller-1.4.0/AndroidManifest.xml:44:25-82
+149            </intent-filter>
+150            <intent-filter>
+150-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/49f5b4f70e293164d9b5ed259c2251f3/transformed/profileinstaller-1.4.0/AndroidManifest.xml:46:13-48:29
+151                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+151-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/49f5b4f70e293164d9b5ed259c2251f3/transformed/profileinstaller-1.4.0/AndroidManifest.xml:47:17-88
+151-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/49f5b4f70e293164d9b5ed259c2251f3/transformed/profileinstaller-1.4.0/AndroidManifest.xml:47:25-85
+152            </intent-filter>
+153            <intent-filter>
+153-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/49f5b4f70e293164d9b5ed259c2251f3/transformed/profileinstaller-1.4.0/AndroidManifest.xml:49:13-51:29
+154                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+154-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/49f5b4f70e293164d9b5ed259c2251f3/transformed/profileinstaller-1.4.0/AndroidManifest.xml:50:17-95
+154-->[androidx.profileinstaller:profileinstaller:1.4.0] /home/ubuntu/.gradle/caches/8.14.3/transforms/49f5b4f70e293164d9b5ed259c2251f3/transformed/profileinstaller-1.4.0/AndroidManifest.xml:50:25-92
+155            </intent-filter>
+156        </receiver>
+157    </application>
+158
+159</manifest>
