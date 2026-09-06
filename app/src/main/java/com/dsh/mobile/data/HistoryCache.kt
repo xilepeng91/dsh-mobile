@@ -1,0 +1,188 @@
+package com.dsh.mobile.data
+
+import android.content.Context
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import java.io.File
+import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
+
+/** 用户消息图片内容块（与 UI 的 UserImage 互转） */
+@Serializable
+data class CachedImage(
+    val mediaType: String,
+    val base64: String,
+)
+
+/** 会话历史缓存的单条条目（与 UI 的 ChatItem 互转） */
+@Serializable
+data class CachedItem(
+    val kind: String,
+    val text: String = "",
+    val name: String = "",
+    val args: String = "",
+    val status: String = "",
+    val result: String? = null,
+    val isError: Boolean = false,
+    val thinkSeconds: Long? = null,
+    /** S5：思考链文本——reasoning-delta 流式累积；落盘缓存，冷启动旧消息恢复思考区（旧缓存无此字段，默认为空串） */
+    val thinkingText: String = "",
+    val streaming: Boolean = false,
+    /** 服务端消息序号：缓存与网络首屏合并去重用（旧缓存无此字段，默认为 null） */
+    val seq: Long? = null,
+    /**
+     * 用户消息图片：只在内存热缓存里保留完整 base64；磁盘写盘前剥离
+     * （磁盘只留 hasImages 占位，冷启动重进先占位、网络刷新后补齐，控制缓存体积）。
+     */
+    val images: List<CachedImage> = emptyList(),
+    val hasImages: Boolean = false,
+)
+
+@Serializable
+data class CachedHistory(
+    val savedAt: Long,
+    val items: List<CachedItem>,
+    /**
+     * 完整加载水位（seq 增量方案）：loadAll 翻到底时记录的最老 seq。
+     * 非空 = items 覆盖 [completeThroughSeq, 最新] 全区间，重进会话免翻页直接全量秒开；
+     * 旧格式缓存缺该字段 → null（退化为普通尾部缓存）。
+     */
+    val completeThroughSeq: Long? = null,
+)
+
+/**
+ * 进程级内存热缓存：解码结果 LRU，避免返回会话/首页时重复读盘+解压+JSON 解码。
+ * - 历史：最近 8 个会话的解码列表（LRU）
+ * - 会话列表：最近一次解码结果
+ * - 预取槽：Home 后台预取的会话首屏（HistoryValue 原始对象，点开即消费）
+ */
+object HistoryMemoryCache {
+    private const val MAX_HISTORIES = 8
+
+    private val histories = object : LinkedHashMap<String, List<CachedItem>>(MAX_HISTORIES, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<CachedItem>>): Boolean =
+            size > MAX_HISTORIES
+    }
+    private val prefetched = HashMap<String, HistoryValue>()
+    private var listCache: List<SessionSummary>? = null
+
+    @Synchronized fun history(id: String): List<CachedItem>? = histories[id]
+    @Synchronized fun putHistory(id: String, items: List<CachedItem>) {
+        if (items.isNotEmpty()) histories[id] = items
+    }
+    @Synchronized fun sessionList(): List<SessionSummary>? = listCache
+    @Synchronized fun putSessionList(items: List<SessionSummary>?) { listCache = items }
+    /** 取走预取（一次性消费）；无则返回 null */
+    @Synchronized fun takePrefetch(id: String): HistoryValue? = prefetched.remove(id)
+    @Synchronized fun putPrefetch(id: String, value: HistoryValue) {
+        if (value.events.isEmpty()) return
+        if (prefetched.size >= 16) prefetched.clear()
+        prefetched[id] = value
+    }
+}
+
+/**
+ * 冷热分离缓存层：
+ * - 热：内存中最近条目（UI 状态流）
+ * - 温：本文件 —— gzip 压缩的磁盘缓存（历史按会话、列表全局），秒开秒显
+ * - 冷：服务器全量历史（loadMore 分页）
+ * gzip 同时服务于"传输减少"：缓存命中时零网络；未命中时 OkHttp 已对响应启用透明 gzip。
+ */
+class HistoryCache(context: Context) {
+    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    private val historyDir = File(context.cacheDir, "history")
+    private val listFile = File(context.cacheDir, "session-list.json.gz")
+
+    // ── 会话历史 ──
+
+    fun loadHistory(sessionId: String): List<CachedItem>? = loadHistoryWithMeta(sessionId)?.items
+
+    /** 读缓存并携带完整加载水位（loadAll 的 seq 增量标记）。 */
+    fun loadHistoryWithMeta(sessionId: String): CachedHistory? {
+        // 内存热缓存优先（零解码）；未命中才读盘解压（水位只存盘上，命中内存时条目必然同源）
+        HistoryMemoryCache.history(sessionId)?.let { return CachedHistory(0L, it, memoryComplete[sessionId]) }
+        val f = historyFile(sessionId)
+        if (!f.exists() || f.length() > 8 * 1024 * 1024) return null
+        val doc = runCatching {
+            GZIPInputStream(f.inputStream()).use {
+                json.decodeFromString<CachedHistory>(it.readBytes().toString(Charsets.UTF_8))
+            }
+        }.getOrNull() ?: return null
+        HistoryMemoryCache.putHistory(sessionId, doc.items)
+        memoryComplete[sessionId] = doc.completeThroughSeq
+        return doc
+    }
+
+    /** 内存中的完整水位（与会话条目同生命周期，磁盘读入时刷新） */
+    private val memoryComplete = HashMap<String, Long?>()
+
+    fun saveHistory(sessionId: String, items: List<CachedItem>, completeThroughSeq: Long? = null) {
+        if (items.isEmpty()) return
+        // 内存即时生效（返回再进零解码，含图片 base64），磁盘延迟由调用方防抖控制
+        HistoryMemoryCache.putHistory(sessionId, items)
+        memoryComplete[sessionId] = completeThroughSeq
+        // 温缓存截断：仅普通尾部缓存限 120 条（省空间）；完整水位非空 = 覆盖到最老，
+        // 截断会破坏 [completeThroughSeq, 最新] 区间完整性 → 全量落盘（图片 base64 仍剥离）
+        val capped = (if (completeThroughSeq != null) items else items.takeLast(120)).map {
+            if (it.images.isNotEmpty()) it.copy(images = emptyList(), hasImages = true) else it
+        }
+        runCatching {
+            historyDir.mkdirs()
+            val payload = json.encodeToString(
+                CachedHistory.serializer(),
+                CachedHistory(System.currentTimeMillis(), capped, completeThroughSeq),
+            )
+            GZIPOutputStream(historyFile(sessionId).outputStream()).use {
+                it.write(payload.toByteArray(Charsets.UTF_8))
+            }
+        }
+    }
+
+    /**
+     * 清理过期缓存：会话历史超过 ttlDays 删除（gzip 解压后内容通常很快失效），
+     * 会话列表超过 listTtlDays 删除。损坏文件（解码失败）也一并清除。
+     */
+    fun prune(ttlDays: Int = 7, listTtlDays: Int = 1) {
+        runCatching {
+            val now = System.currentTimeMillis()
+            val historyTtl = ttlDays * 24L * 3600 * 1000
+            val listTtl = listTtlDays * 24L * 3600 * 1000
+            historyDir.listFiles()?.forEach { f ->
+                if (f.isFile && (now - f.lastModified() > historyTtl)) f.delete()
+            }
+            if (listFile.isFile && (now - listFile.lastModified() > listTtl)) listFile.delete()
+        }
+    }
+
+    fun clearHistory(sessionId: String) {
+        historyFile(sessionId).delete()
+    }
+
+    // ── 会话列表（全局，短 TTL 语义由调用方控制） ──
+
+    fun loadSessionList(): List<SessionSummary>? {
+        // 内存热缓存优先
+        HistoryMemoryCache.sessionList()?.let { return it }
+        if (!listFile.exists() || listFile.length() > 1 * 1024 * 1024) return null
+        val items = runCatching {
+            GZIPInputStream(listFile.inputStream()).use {
+                json.decodeFromString<SessionListValue>(it.readBytes().toString(Charsets.UTF_8)).items
+            }
+        }.getOrNull()
+        if (items != null) HistoryMemoryCache.putSessionList(items)
+        return items
+    }
+
+    fun saveSessionList(items: List<SessionSummary>) {
+        HistoryMemoryCache.putSessionList(items)
+        runCatching {
+            val payload = json.encodeToString(SessionListValue.serializer(), SessionListValue(items))
+            GZIPOutputStream(listFile.outputStream()).use {
+                it.write(payload.toByteArray(Charsets.UTF_8))
+            }
+        }
+    }
+
+    private fun historyFile(sessionId: String): File =
+        File(historyDir, sessionId.replace(Regex("[^A-Za-z0-9_-]"), "_") + ".json.gz")
+}
