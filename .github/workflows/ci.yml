@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  plugin:
+    name: Plugin (dsh-remote-access)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dsh-remote-access
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install deps
+        # 仓库暂无 package-lock.json（本地 npm 网络受限未能生成），用 npm install（幂等）
+        run: npm install
+      - name: Build (src → lib)
+        run: npm run build
+      - name: Test on built output (smoke 12/12)
+        run: npm test
+      # prepack 生命周期会再跑 typecheck+build+test 并产出 tgz
+      - name: Pack
+        run: npm pack
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsh-remote-access-tgz
+          path: dsh-remote-access/dsh-remote-access-*.tgz
+          if-no-files-found: error
+
+  android:
+    name: Android (App)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v6
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+      - name: Assemble debug APK
+        run: ./gradlew assembleDebug --no-daemon --console=plain
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
