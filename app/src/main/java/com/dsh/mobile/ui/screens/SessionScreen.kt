@@ -64,6 +64,9 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import com.dsh.mobile.data.*
 import com.dsh.mobile.ui.components.MarkdownText
+import com.dsh.mobile.ui.components.MusicPlayer
+import com.dsh.mobile.ui.components.MusicPlayerCard
+import com.dsh.mobile.ui.components.firstMp3Url
 import com.dsh.mobile.ui.theme.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -286,6 +289,8 @@ class SessionChatState(
     val running = MutableStateFlow(false)
     val currentMode = MutableStateFlow<String?>(null)
     val imageLimits = MutableStateFlow<JsonObject?>(null)
+    /** 音乐自动播放候选：live 完整 assistant 回复文本含 mp3 链接时发布；UI 消费后置空（历史加载不触发） */
+    val musicCandidate = MutableStateFlow<String?>(null)
     var hasMore = false
     /** 完整加载水位：loadAll 翻到底时记录的最老 seq（缓存覆盖 [水位, 最新] 全区间） */
     private var cacheCompleteThrough: Long? = null
@@ -349,6 +354,13 @@ class SessionChatState(
         accumulated.isBlank() -> block
         block.length > accumulated.length -> block
         else -> accumulated
+    }
+
+    /** 音乐自动播放：live 完整回复含 mp3 链接 → 只发布第一个候选，UI 播放后消费 */
+    private fun publishMusicCandidate(text: String) {
+        if (musicCandidate.value == null) {
+            firstMp3Url(text)?.let { musicCandidate.value = it }
+        }
     }
 
     private fun flushPendingChunk() {
@@ -677,6 +689,7 @@ class SessionChatState(
                         )
                     )
                 }
+                if (t.isNotBlank()) publishMusicCandidate(t)
                 streamStart = null
             }
 
@@ -721,6 +734,7 @@ class SessionChatState(
                 val idx = cur.indexOfLast { it is ChatItem.Assistant && it.streaming }
                 if (idx >= 0) {
                     val a = cur[idx] as ChatItem.Assistant
+                    publishMusicCandidate(a.text)
                     cur[idx] = ChatItem.Assistant(
                         a.key, a.text,
                         thinkingText = a.thinkingText,
@@ -774,6 +788,16 @@ fun SessionScreen(
     val initialLoading by state.initialLoading.collectAsState()
     val title by state.title.collectAsState()
     val running by state.running.collectAsState()
+
+    // 音乐自动播放：live 回复带 mp3 链接 → 空闲时播一次；气泡按钮可随时停止/重播
+    val autoMusicUrl by state.musicCandidate.collectAsState()
+    LaunchedEffect(autoMusicUrl) {
+        val url = autoMusicUrl
+        if (url != null) {
+            MusicPlayer.playIfIdle(url)
+            state.musicCandidate.value = null
+        }
+    }
 
     // 本会话待办数量（审批 + 问答，异常不计入轻提示条）
     val centerItems by approvalCenter.items.collectAsState()
@@ -1974,6 +1998,12 @@ private fun AssistantCard(item: ChatItem.Assistant, modifier: Modifier = Modifie
                             }
                         }
                     }
+                }
+                // 音乐卡片：回复含 mp3 直链时渲染播放/暂停按钮（流式中不闪出，避免 URL 未写完）
+                val musicUrl = remember(item.text) { firstMp3Url(item.text) }
+                if (musicUrl != null && !item.streaming) {
+                    Spacer(Modifier.height(8.dp))
+                    MusicPlayerCard(url = musicUrl)
                 }
             }
         }
