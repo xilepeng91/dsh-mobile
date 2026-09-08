@@ -16,12 +16,34 @@ import java.util.UUID
 class ApiException(message: String, val code: String? = null) : Exception(message)
 
 /**
- * DSH RPC 连接（真实协议，对应 dsh-client-connection）：
- * - 上行: POST /api/<method>  body = client-request {type, rpcId, method, payload}
- * - 下行: 响应 = server-response {type, rpcId, result: {ok, value|error}}
- * - 事件流: GET /api/events.mux (Accept: text/event-stream)，SSE data = server-request，
- *           payload = MuxFrame（session/event、approval/requested、question/requested…）
- * - 应答: POST /api/respond  body = client-response {type, rpcId, result}
+ * 把用户填写的服务器地址归一为「以 /m/api 结尾」的 baseUrl（连接/诊断共享同一语义）。
+ * 兼容三种输入：
+ *  - `192.168.1.100:8787`        → `http://192.168.1.100:8787/m/api`
+ *  - `http://host:8787/m`        → `http://host:8787/m/api`
+ *  - `http://host:8787/m/api`    → 原样保留（避免重复追加）
+ * 服务端在 `${basePath}/api`（默认 /m/api）前缀挂载移动端 REST 面，restGet/SSE/compat
+ * 均以此前缀拼接。若用户地址带自定义 basePath（非 /m），保留其 host+path 后的 /api 语义。
+ */
+fun normalizeApiBaseUrl(raw: String): String {
+    var u = normalizeBaseUrl(raw)
+    if (u.isEmpty()) return u
+    // 已有 /api 结尾：仅当是 /m/api 语义时保留（本例服务端固定 /m/api）
+    if (u.endsWith("/api")) return u
+    if (u.endsWith("/m")) return "$u/api"
+    return "$u/m/api"
+}
+
+/**
+ * DSH RPC 连接（方案 A：对接 dsh-mobile-remote 插件的原生 /m/api REST 面）：
+ * - 连接探测: GET  /m/api/bootstrap  → plugin.version
+ * - 会话清单: GET  /m/api/sessions    → [{id, createdAt, cwd, live, title}]
+ * - 新建会话: POST /m/api/sessions    → {sessionId}
+ * - 发送:     POST /m/api/send  body = {sessionId, mode, text, images[]}
+ * - 历史:     GET  /m/api/history?sessionId&before&limit → events:[summarizeEvent]
+ * - 应答:     POST /m/api/respond body = {rpcId, kind, sessionId, answers|approvalId+outcome}
+ * - 事件流:   GET  /m/api/events (SSE)，data = {type,…} 移动协议信封，
+ *            type ∈ session/event | mobile/frame | agent/status | session/context | mobile/queue
+ * 其余（工作区/目录/技能/mcp/vault 等）走 /m/api/compat 上游透传。
  */
 class DshConnection(private val appContext: Context? = null) {
 
@@ -109,7 +131,9 @@ class DshConnection(private val appContext: Context? = null) {
 
     @Synchronized
     fun connect(profile: HostProfile, onAttempt: ((AttemptInfo) -> Unit)? = null) {
-        val normalized = normalizeBaseUrl(profile.url)
+        // 访问口令已写入 channelToken（手填），OKHttp 拦截器自动带 x-mobile-token，
+        // 无需配对握手。地址统一归一为「以 /m/api 结尾」，兼容填 host:port / host:port/m / host:port/m/api。
+        val normalized = normalizeApiBaseUrl(profile.url)
         if (_state.value is State.Connected && baseUrl == normalized) return
         disconnectInternal()
         profileId = profile.id
@@ -125,10 +149,9 @@ class DshConnection(private val appContext: Context? = null) {
             var attempt = 0
             while (isActive) {
                 val result = try {
-                    val value = call(DshEndpoints.HOST_DESCRIBE)
-                    val version = runCatching {
-                        value.jsonObject["version"]?.jsonPrimitive?.contentOrNull
-                    }.getOrNull()
+                    // 方案 A：改用插件原生 /m/api/bootstrap（返回 plugin.version）。
+                    // HTTP 失败/未鉴权在此抛出 → 走 Fail 分支，避免"未知版本但假连上"。
+                    val version = mobilePluginVersion()
                     ConnectionResult.Ok(version)
                 } catch (e: Exception) {
                     val code = classifyConnectError(e)
@@ -146,8 +169,8 @@ class DshConnection(private val appContext: Context? = null) {
                         // UNKNOWN（占位/缺失/无法解析）时 hostVersion 置 null → UI 显示「版本未知」
                         val hostVersion = if (verdict == VersionVerdict.OK) result.version else null
                         _state.value = State.Connected(normalized, hostVersion)
-                        streamLoop("mux", "/api/events.mux")
-                        streamLoop("host", "/api/events.host")
+                        // 方案 A：事件流走插件原生 /m/api/events（summarizeEvent 移动协议）
+                        streamLoop("events", "/events")
                         break
                     }
                     is ConnectionResult.Fail -> {
@@ -345,17 +368,62 @@ class DshConnection(private val appContext: Context? = null) {
 
     private fun handleStreamData(data: String) {
         if (data.isBlank()) return
-        val parsed = try {
-            json.decodeFromString(ServerRequest.serializer(), data)
+        val obj = try {
+            json.parseToJsonElement(data).jsonObject
         } catch (e: Exception) {
             return
         }
-        val frame = try {
-            json.decodeFromJsonElement(MuxFrame.serializer(), parsed.payload)
-        } catch (e: Exception) {
-            return
+        when (obj["type"]?.jsonPrimitive?.contentOrNull) {
+            // 会话内容事件：{ type:"session/event", sessionId, event: summarizeEvent }
+            "session/event" -> {
+                val sid = obj["sessionId"]?.jsonPrimitive?.contentOrNull ?: return
+                val ev = obj["event"]?.jsonObject ?: return
+                _events.tryEmit(Event.SessionEvent(sid, sessionEventWireFrom(ev)))
+            }
+            // 审批/问答/工作状态等 MuxFrame：{ type:"mobile/frame", frame:{..., rpcId} }
+            "mobile/frame" -> {
+                val frame = obj["frame"] ?: return
+                val rpcId = if (frame is JsonObject) frame["rpcId"]?.jsonPrimitive?.contentOrNull ?: "" else ""
+                val mf = try { json.decodeFromJsonElement(MuxFrame.serializer(), frame) } catch (e: Exception) { return }
+                dispatchFrame(rpcId, mf)
+            }
+            // 代理状态：{ type:"agent/status", sessionId, status }
+            "agent/status" -> {
+                val sid = obj["sessionId"]?.jsonPrimitive?.contentOrNull ?: return
+                val status = obj["status"]?.jsonPrimitive?.contentOrNull ?: "unknown"
+                _events.tryEmit(Event.SessionStatus(sid, status))
+            }
+            // 上下文窗口：{ type:"session/context", sessionId, contextWindow }
+            "session/context" -> {
+                val sid = obj["sessionId"]?.jsonPrimitive?.contentOrNull ?: return
+                _events.tryEmit(Event.Projection(sid, "contextWindow", obj["contextWindow"] ?: JsonNull))
+            }
+            // 队列：{ type:"mobile/queue", sessionId, rows }（队列行与工作条目并存，容错解析）
+            "mobile/queue" -> {
+                val sid = obj["sessionId"]?.jsonPrimitive?.contentOrNull ?: return
+                val rows = obj["rows"]?.jsonArray?.map { it.jsonObject } ?: emptyList()
+                val jobs = rows.mapNotNull { r ->
+                    val id = r["id"]?.jsonPrimitive?.contentOrNull
+                        ?: r["requestId"]?.jsonPrimitive?.contentOrNull
+                        ?: return@mapNotNull null
+                    JobView(
+                        id = id,
+                        kind = r["kind"]?.jsonPrimitive?.contentOrNull ?: "queue",
+                        label = r["label"]?.jsonPrimitive?.contentOrNull
+                            ?: r["text"]?.jsonPrimitive?.contentOrNull
+                            ?: "",
+                        status = r["status"]?.jsonPrimitive?.contentOrNull ?: "queued",
+                        detail = r["detail"]?.jsonPrimitive?.contentOrNull,
+                        startedAt = r["startedAt"]?.jsonPrimitive?.longOrNull
+                            ?: r["createdAt"]?.jsonPrimitive?.longOrNull
+                            ?: 0L,
+                        finishedAt = r["finishedAt"]?.jsonPrimitive?.longOrNull,
+                    )
+                }
+                _events.tryEmit(Event.Jobs(sid, jobs))
+            }
+            else -> Unit // hello / notifications/changed / sessionJobsFrames 任务视图 → 忽略
         }
-        dispatchFrame(parsed.rpcId, frame)
     }
 
     private fun dispatchFrame(rpcId: String, f: MuxFrame) {
@@ -421,8 +489,9 @@ class DshConnection(private val appContext: Context? = null) {
         val body = json.encodeToString(ClientRequest.serializer(), envelope)
             .toRequestBody("application/json".toMediaType())
 
+        // 方案 C(服务器兼容网关)：统一定到 /m/api/compat/rpc，服务端读信封里的 method 派发
         val request = Request.Builder()
-            .url("$baseUrl/api/$method")
+            .url("$baseUrl/compat/rpc")
             .post(body)
             .build()
 
@@ -449,32 +518,21 @@ class DshConnection(private val appContext: Context? = null) {
         }
     }
 
-    /** POST /api/respond —— 应答 server-request（审批/问答） */
-    suspend fun respond(rpcId: String, resultValue: JsonObject) {
-        val envelope = ClientResponse(
-            rpcId = rpcId,
-            result = RpcResult(ok = true, value = resultValue),
-        )
-        val body = json.encodeToString(ClientResponse.serializer(), envelope)
-            .toRequestBody("application/json".toMediaType())
-        val request = Request.Builder()
-            .url("$baseUrl/api/respond")
-            .post(body)
-            .build()
-        val response = withContext(Dispatchers.IO) { unaryClient.newCall(request).execute() }
-        response.use { resp ->
-            if (!resp.isSuccessful) {
-                val text = resp.body?.string().orEmpty()
-                throw ApiException("respond HTTP ${resp.code}: $text")
-            }
+    /** POST /m/api/respond —— 应答 server-request（kind = approval | question | cancel） */
+    suspend fun respond(rpcId: String, kind: String, sessionId: String? = null, extra: JsonObject = buildJsonObject { }) {
+        val body = buildJsonObject {
+            put("rpcId", rpcId)
+            put("kind", kind)
+            sessionId?.let { put("sessionId", it) }
+            extra.forEach { (k, v) -> put(k, v) }
         }
+        restPost("/respond", body)
     }
 
     suspend fun answerApproval(sessionId: String, approvalId: String, outcome: String) {
         val rpcId = pendingApprovalRpc.remove(approvalId)
             ?: throw ApiException("approvalId 无对应待应答请求（可能已过期）")
-        respond(rpcId, buildJsonObject {
-            put("sessionId", sessionId)
+        respond(rpcId, "approval", sessionId, buildJsonObject {
             put("approvalId", approvalId)
             put("outcome", outcome)
         })
@@ -483,41 +541,169 @@ class DshConnection(private val appContext: Context? = null) {
     suspend fun answerQuestions(sessionId: String, answers: List<QuestionAnswer>) {
         val rpcId = pendingQuestionRpc.remove(sessionId)
             ?: throw ApiException("问答无对应待应答请求（可能已过期）")
-        respond(rpcId, buildJsonObject {
-            put("sessionId", sessionId)
-            put("answer", buildJsonObject {
-                put("answers", buildJsonArray {
-                    answers.forEach { a ->
-                        add(buildJsonObject {
-                            put("id", a.id)
-                            put("selected", buildJsonArray { a.selected.forEach { add(it) } })
-                            a.custom?.let { put("custom", it) }
-                        })
-                    }
-                })
+        respond(rpcId, "question", sessionId, buildJsonObject {
+            put("answers", buildJsonArray {
+                answers.forEach { a ->
+                    add(buildJsonObject {
+                        put("id", a.id)
+                        put("selected", buildJsonArray { a.selected.forEach { add(it) } })
+                        a.custom?.let { put("custom", it) }
+                    })
+                }
             })
         })
     }
 
     data class QuestionAnswer(val id: String, val selected: List<String>, val custom: String? = null)
 
+    // ────────────────────────── 方案 A：插件原生 /m/api REST 传输 ──────────────────────────
+
+    private data class MobileSessionInfo(
+        val id: String,
+        val createdAt: Long,
+        val cwd: String? = null,
+        val title: String? = null,
+        val live: Boolean = false,
+    )
+
+    private suspend fun restGet(path: String, query: List<Pair<String, String>> = emptyList()): JsonElement {
+        val url = buildString {
+            append(baseUrl).append(path)
+            if (query.isNotEmpty()) {
+                append('?')
+                append(query.joinToString("&") { (k, v) ->
+                    "$k=" + java.net.URLEncoder.encode(v, "UTF-8")
+                })
+            }
+        }
+        return withContext(Dispatchers.IO) {
+            val request = Request.Builder().url(url).get().build()
+            unaryClient.newCall(request).execute().use { resp ->
+                val text = resp.body?.string().orEmpty()
+                if (!resp.isSuccessful) throw ApiException("HTTP ${resp.code}", resp.code.toString())
+                json.parseToJsonElement(text)
+            }
+        }
+    }
+
+    private suspend fun restPost(path: String, body: JsonObject): JsonElement {
+        val reqBody = body.toString().toRequestBody("application/json".toMediaType())
+        val request = Request.Builder().url(baseUrl + path).post(reqBody).build()
+        return withContext(Dispatchers.IO) {
+            unaryClient.newCall(request).execute().use { resp ->
+                val text = resp.body?.string().orEmpty()
+                if (!resp.isSuccessful) throw ApiException("HTTP ${resp.code}", resp.code.toString())
+                val obj = json.parseToJsonElement(text)
+                if (obj is JsonObject && obj["ok"]?.jsonPrimitive?.booleanOrNull == false) {
+                    throw ApiException(obj["error"]?.jsonPrimitive?.contentOrNull ?: "REST 失败", null)
+                }
+                obj
+            }
+        }
+    }
+
+    /** GET /m/api/bootstrap：插件启动信息 {ok, plugin:{version}} —— 用于连接版本探测（HTTP 失败抛异常） */
+    private suspend fun mobilePluginVersion(): String? {
+        val obj = restGet("/bootstrap").jsonObject
+        return obj["plugin"]?.jsonObject?.get("version")?.jsonPrimitive?.contentOrNull
+    }
+
+    /** GET /m/api/sessions：会话清单 [{id, createdAt, cwd, live, title}] */
+    private suspend fun mobileSessions(): List<MobileSessionInfo> {
+        val obj = restGet("/sessions").jsonObject
+        return obj["sessions"]?.jsonArray?.mapNotNull { el ->
+            val o = el.jsonObject
+            val id = o["id"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+            MobileSessionInfo(
+                id = id,
+                createdAt = o["createdAt"]?.jsonPrimitive?.longOrNull ?: 0L,
+                cwd = o["cwd"]?.jsonPrimitive?.contentOrNull,
+                title = o["title"]?.jsonPrimitive?.contentOrNull,
+                live = o["live"]?.jsonPrimitive?.booleanOrNull ?: false,
+            )
+        } ?: emptyList()
+    }
+
+    /** POST /m/api/sessions：新建会话，返回 {sessionId} */
+    private suspend fun mobileCreateSession(agentPreset: String?, model: String?, provider: String?): String {
+        val obj = restPost("/sessions", buildJsonObject {
+            agentPreset?.let { put("preset", it) }
+            model?.let { put("model", it) }
+            provider?.let { put("provider", it) }
+        }).jsonObject
+        return obj["sessionId"]?.jsonPrimitive?.contentOrNull
+            ?: throw ApiException("未返回 sessionId")
+    }
+
+    /** POST /m/api/send：发送 prompt（text + 内嵌 base64 图片），返回 messageId 等 */
+    private suspend fun mobileSend(sessionId: String, text: String, mode: String, images: List<ImagePart>) {
+        restPost("/send", buildJsonObject {
+            put("sessionId", sessionId)
+            put("mode", mode)
+            put("text", text)
+            if (images.isNotEmpty()) {
+                put("images", buildJsonArray {
+                    images.forEach { img ->
+                        add(buildJsonObject {
+                            put("mediaType", img.mediaType)
+                            put("data", img.base64Data)
+                            img.name?.let { put("name", it) }
+                        })
+                    }
+                })
+            }
+        })
+    }
+
+    /** GET /m/api/history?sessionId=.. ：summarizeEvent[] 摘要事件 → HistoryValue */
+    private suspend fun mobileHistory(sessionId: String, beforeSeq: Long? = null, limit: Int? = null): HistoryValue {
+        val query = buildList {
+            add("sessionId" to sessionId)
+            beforeSeq?.let { add("before" to it.toString()) }
+            limit?.let { add("limit" to it.toString()) }
+        }
+        val obj = restGet("/history", query).jsonObject
+        val events = obj["events"]?.jsonArray?.mapNotNull { el ->
+            val e = el.jsonObject
+            HistoryEntry(sessionEventWireFrom(e), null)
+        } ?: emptyList()
+        return HistoryValue(events = events, hasMore = events.size >= (limit ?: 0))
+    }
+
+    /** 插件 summarizeEvent {seq,type,data,time} → SessionEventWire（type/seq/data 与旧 wire 同构） */
+    private fun sessionEventWireFrom(o: JsonObject): SessionEventWire {
+        val type = o["type"]?.jsonPrimitive?.contentOrNull ?: ""
+        val seq = o["seq"]?.jsonPrimitive?.longOrNull ?: 0L
+        val time = o["time"]?.jsonPrimitive?.longOrNull ?: 0L
+        val data = o["data"] ?: JsonNull
+        return SessionEventWire(type = type, seq = seq, time = time, data = data)
+    }
+
     // ────────────────────────── 业务便捷方法 ──────────────────────────
 
     suspend fun listSessions(): List<SessionSummary> {
-        val value = call(DshEndpoints.SESSION_LIST)
         return try {
-            json.decodeFromJsonElement(SessionListValue.serializer(), value).items
+            mobileSessions().map { s ->
+                SessionSummary(
+                    sessionId = s.id,
+                    updatedAt = s.createdAt,
+                    running = s.live,
+                    blank = false,
+                    cwd = s.cwd,
+                    projections = buildJsonObject {
+                        put("values", buildJsonObject {
+                            s.title?.let { put("title", it) }
+                        })
+                    },
+                )
+            }
         } catch (e: Exception) {
             emptyList()
         }
     }
 
     suspend fun createSession(agentPreset: String? = null, workspaceId: String? = null): String {
-        val value = call(DshEndpoints.SESSION_CREATE, buildJsonObject {
-            agentPreset?.let { put("agentPreset", it) }
-            workspaceId?.let { put("workspaceId", it) }
-        })
-        return json.decodeFromJsonElement(SessionCreateValue.serializer(), value).sessionId
+        return mobileCreateSession(agentPreset, null, null)
     }
 
     /** 图片附件（内嵌 base64 的 prompt 内容块） */
@@ -529,26 +715,7 @@ class DshConnection(private val appContext: Context? = null) {
         mode: String = "queue",
         images: List<ImagePart> = emptyList(),
     ) {
-        call(DshEndpoints.SESSION_PROMPT, buildJsonObject {
-            put("sessionId", sessionId)
-            put("mode", mode)
-            put("content", buildJsonArray {
-                if (text.isNotBlank()) {
-                    add(buildJsonObject {
-                        put("type", "text")
-                        put("text", text)
-                    })
-                }
-                images.forEach { img ->
-                    add(buildJsonObject {
-                        put("type", "image")
-                        put("mediaType", img.mediaType)
-                        put("data", img.base64Data)
-                        img.name?.let { put("name", it) }
-                    })
-                }
-            })
-        })
+        mobileSend(sessionId, text, mode, images)
     }
 
     /** 执行会话命令（如 /permission read-only 切换审查严格度） */
@@ -576,16 +743,9 @@ class DshConnection(private val appContext: Context? = null) {
     }
 
     suspend fun history(sessionId: String, beforeSeq: Long? = null, maxMessages: Int? = null): HistoryValue {
-        val value = call(DshEndpoints.SESSION_HISTORY, buildJsonObject {
-            put("sessionId", sessionId)
-            beforeSeq?.let { put("beforeSeq", it) }
-            maxMessages?.let { put("maxMessages", it) }
-        })
-        // 解码可能达数万条事件（assistant/chunk 占绝大多数），必须在后台线程做，
-        // 否则主线程卡死 → ANR/闪退
         return withContext(Dispatchers.Default) {
             try {
-                json.decodeFromJsonElement(HistoryValue.serializer(), value)
+                mobileHistory(sessionId, beforeSeq, maxMessages)
             } catch (e: Exception) {
                 HistoryValue()
             }
@@ -598,12 +758,10 @@ class DshConnection(private val appContext: Context? = null) {
      * 网络失败抛 ApiException（UI 负责失败提示），响应缺 events 字段 → 空列表。
      */
     suspend fun historyRawEvents(sessionId: String): List<JsonElement> {
-        val value = call(DshEndpoints.SESSION_HISTORY, buildJsonObject {
-            put("sessionId", sessionId)
-        })
+        val obj = restGet("/history", listOf("sessionId" to sessionId)).jsonObject
         // 大 payload 提取在后台线程完成，避免主线程卡顿
         return withContext(Dispatchers.Default) {
-            value.jsonObject["events"]?.jsonArray?.toList() ?: emptyList()
+            obj["events"]?.jsonArray?.toList() ?: emptyList()
         }
     }
 
@@ -663,7 +821,7 @@ class DshConnection(private val appContext: Context? = null) {
             val text = withContext(Dispatchers.IO) {
                 val encoded = java.net.URLEncoder.encode(path, "UTF-8")
                 val request = Request.Builder()
-                    .url("$baseUrl/api/remote-access/fs/list?path=$encoded")
+                    .url("$baseUrl/compat/remote-access/fs/list?path=$encoded")
                     .get()
                     .build()
                 unaryClient.newCall(request).execute().use { resp ->
@@ -688,7 +846,7 @@ class DshConnection(private val appContext: Context? = null) {
             val text = withContext(Dispatchers.IO) {
                 val encoded = java.net.URLEncoder.encode(path, "UTF-8")
                 val request = Request.Builder()
-                    .url("$baseUrl/api/remote-access/fs/list?path=$encoded")
+                    .url("$baseUrl/compat/remote-access/fs/list?path=$encoded")
                     .get()
                     .build()
                 unaryClient.newCall(request).execute().use { resp ->
@@ -722,7 +880,7 @@ class DshConnection(private val appContext: Context? = null) {
             val text = withContext(Dispatchers.IO) {
                 val encoded = java.net.URLEncoder.encode(path, "UTF-8")
                 val request = Request.Builder()
-                    .url("$baseUrl/api/remote-access/fs/read?path=$encoded")
+                    .url("$baseUrl/compat/remote-access/fs/read?path=$encoded")
                     .get()
                     .build()
                 unaryClient.newCall(request).execute().use { resp ->
@@ -746,7 +904,7 @@ class DshConnection(private val appContext: Context? = null) {
         return try {
             val text = withContext(Dispatchers.IO) {
                 val request = Request.Builder()
-                    .url("$baseUrl/api/remote-access/mcp/list")
+                    .url("$baseUrl/compat/remote-access/mcp/list")
                     .get()
                     .build()
                 unaryClient.newCall(request).execute().use { resp ->
@@ -772,7 +930,7 @@ class DshConnection(private val appContext: Context? = null) {
     /** 插件 mcp/resources/list（M3）：MCP 资源能力清册；失败/不可用 → 空列表 */
     suspend fun mcpResources(): List<McpResourceServer> {
         return try {
-            val text = mcpGetText("/api/remote-access/mcp/resources/list")
+            val text = mcpGetText("/compat/remote-access/mcp/resources/list")
             if (text.isBlank()) emptyList() else parseMcpResources(json.parseToJsonElement(text))
         } catch (e: Exception) {
             emptyList()
@@ -782,7 +940,7 @@ class DshConnection(private val appContext: Context? = null) {
     /** 插件 mcp/prompts/list（M3）：MCP 提示词能力清册；失败/不可用 → 空列表 */
     suspend fun mcpPrompts(): List<McpPromptServer> {
         return try {
-            val text = mcpGetText("/api/remote-access/mcp/prompts/list")
+            val text = mcpGetText("/compat/remote-access/mcp/prompts/list")
             if (text.isBlank()) emptyList() else parseMcpPrompts(json.parseToJsonElement(text))
         } catch (e: Exception) {
             emptyList()
@@ -796,7 +954,7 @@ class DshConnection(private val appContext: Context? = null) {
             arguments?.let { body.put("arguments", JSONObject(it)) }
             val text = withContext(Dispatchers.IO) {
                 val request = Request.Builder()
-                    .url("$baseUrl/api/remote-access/mcp/prompts/render")
+                    .url("$baseUrl/compat/remote-access/mcp/prompts/render")
                     .post(body.toString().toRequestBody("application/json".toMediaType()))
                     .build()
                 unaryClient.newCall(request).execute().use { resp ->
@@ -816,7 +974,7 @@ class DshConnection(private val appContext: Context? = null) {
      */
     suspend fun vaultStatus(): VaultStatus? {
         return try {
-            val text = postVaultRoute("/api/credentials.status", "{}")
+            val text = postVaultRoute("/compat/credentials.status", "{}")
             if (text == null) null else parseVaultStatus(text)
         } catch (e: Exception) {
             null
@@ -830,7 +988,7 @@ class DshConnection(private val appContext: Context? = null) {
      */
     suspend fun vaultUnlock(digest: String): VaultUnlockResult? {
         val text = try {
-            postVaultRoute("/api/credentials.unlock", JSONObject().put("digest", digest).toString())
+            postVaultRoute("/compat/credentials.unlock", JSONObject().put("digest", digest).toString())
         } catch (e: Exception) {
             return null
         } ?: return null

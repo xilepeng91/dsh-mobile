@@ -31,8 +31,9 @@ class DshApplication : Application() {
         ProTokenBank.init(this)
         // 更新镜像偏好初始化（记住上次成功的镜像，下次优先）
         UpdateChecker.init(this)
-        // 配对握手协调器启动（Connected 后按活跃 profile 自动握手）
-        pairingCoordinator.start()
+        // 注：配对协调器不再启动——连接方式已改为「手填服务器地址 + 访问口令」，
+        // 保存时已写入 channelToken 并置 paired=true，无需扫码/配对握手/MAC 校验。
+        // pairingCoordinator 惰性实例保留，awaitingDecision 恒为 null，门禁按 paired 放行。
         // 注：资源更新检查在 MainActivity 的 UpdatePromptOverlay 里做（有更新弹窗询问，无更新静默）
     }
 

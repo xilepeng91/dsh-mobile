@@ -109,12 +109,14 @@ object OkHttpClientFactory {
             builder.proxyAuthenticator(proxyAuthenticator(p.username, p.password))
         }
         // 远程通道 token：请求时从注册表动态取（配对下发后热生效；无 token 时不加头，
-        // 兼容未启用鉴权的旧 PC 端）
+        // 兼容未启用鉴权的旧 PC 端）。
+        // 方案 C(服务器兼容网关)：dsh-mobile-remote 的 /m/api 面用 x-mobile-token 鉴权
+        // （而非旧 client-connection 的 Authorization Bearer），App 直连服务器时用该头。
         builder.addInterceptor { chain ->
-            val token = ChannelTokenRegistry.get(profile.id)
-            val req = if (token.isNullOrBlank()) chain.request()
-            else chain.request().newBuilder().header("Authorization", "Bearer $token").build()
-            chain.proceed(req)
+        	val token = ChannelTokenRegistry.get(profile.id)
+        	val req = if (token.isNullOrBlank()) chain.request()
+        	else chain.request().newBuilder().header("x-mobile-token", token).build()
+        	chain.proceed(req)
         }
         return builder.build()
     }

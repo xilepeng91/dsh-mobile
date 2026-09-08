@@ -55,6 +55,7 @@ class SettingsStore(
         private val NOTIFY_APPROVALS_KEY = booleanPreferencesKey("notify_approvals")
         private val NOTIFY_COMPLETION_KEY = booleanPreferencesKey("notify_completion")
         private val QUICK_PROMPTS_KEY = stringPreferencesKey("quick_prompts")
+        private val AUTO_SPEAK_KEY = booleanPreferencesKey("auto_speak")
         private val VAULT_DIGEST_KEY = stringPreferencesKey("vault_digest_enc")
         private val PINNED_SESSION_IDS_KEY = stringPreferencesKey("pinned_session_ids")
         private val AUTO_MODEL_KEY = booleanPreferencesKey("auto_model")
@@ -288,6 +289,15 @@ class SettingsStore(
 
     suspend fun setAutoModel(enabled: Boolean) {
         context.dataStore.edit { it[AUTO_MODEL_KEY] = enabled }
+    }
+
+    /** 语音播报（T8）：AI 回复完成后用系统 TTS 自动朗读（默认开；会话页提供开关） */
+    val autoSpeak: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[AUTO_SPEAK_KEY] ?: true
+    }
+
+    suspend fun setAutoSpeak(enabled: Boolean) {
+        context.dataStore.edit { it[AUTO_SPEAK_KEY] = enabled }
     }
 
     /** 生物锁：回到前台需生物识别验证后才能操控电脑（默认关） */

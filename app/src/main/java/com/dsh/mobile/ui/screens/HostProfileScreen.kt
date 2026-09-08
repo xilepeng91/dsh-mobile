@@ -42,6 +42,8 @@ fun HostProfileScreen(profileId: String?, connection: DshConnection, onBack: () 
 
     var remark by remember { mutableStateOf("") }
     var url by remember { mutableStateOf("") }
+    // 访问口令（= 服务端 authToken）：多设备/多人异地连接用同一口令鉴权，无需扫码配对
+    var accessToken by remember { mutableStateOf("") }
     var trustSelfSigned by remember { mutableStateOf(false) }
     var caCertUri by remember { mutableStateOf<String?>(null) }
     var proxyType by remember { mutableStateOf("none") }
@@ -58,6 +60,7 @@ fun HostProfileScreen(profileId: String?, connection: DshConnection, onBack: () 
         val p = original ?: return@LaunchedEffect
         remark = p.remark
         url = p.url
+        accessToken = p.channelToken
         trustSelfSigned = p.trustSelfSigned
         caCertUri = p.caCertUri
         proxyType = p.proxy?.type ?: "none"
@@ -88,11 +91,15 @@ fun HostProfileScreen(profileId: String?, connection: DshConnection, onBack: () 
     }
 
     fun save() {
+        // 访问口令（= 服务端 authToken）：手填即用，保存时写入 channelToken 并置为已配对，
+        // 从而绕过扫码/配对握手/设备 MAC 校验等单机绑定逻辑，支持多人异地直接连接。
         val profile = (original ?: HostProfile(id = UUID.randomUUID().toString(), remark = "", url = ""))
             .copy(
                 // 设备名称留空即用机型；不再把地址回填成名称（列表不展示 IP）
                 remark = remark.trim(),
                 url = normalizeBaseUrl(url),
+                channelToken = accessToken.trim(),
+                paired = true,
                 trustSelfSigned = trustSelfSigned,
                 caCertUri = caCertUri,
                 proxy = if (proxyType == "none") null else ProxyConfig(
@@ -113,6 +120,7 @@ fun HostProfileScreen(profileId: String?, connection: DshConnection, onBack: () 
                 val orig = original
                 val paramsChanged = orig == null ||
                     orig.url != profile.url ||
+                    orig.channelToken != profile.channelToken ||
                     orig.trustSelfSigned != profile.trustSelfSigned ||
                     orig.caCertUri != profile.caCertUri ||
                     orig.proxy != profile.proxy
@@ -146,6 +154,9 @@ fun HostProfileScreen(profileId: String?, connection: DshConnection, onBack: () 
     fun runDiag() {
         val profile = (original ?: return).copy(
             remark = remark, url = normalizeBaseUrl(url),
+            // 诊断需带上访问口令，否则 401 会被误判为鉴权/地址错误
+            channelToken = accessToken.trim(),
+            paired = true,
             trustSelfSigned = trustSelfSigned, caCertUri = caCertUri,
             proxy = if (proxyType == "none") null else ProxyConfig(
                 type = proxyType, host = proxyHost, port = proxyPort.toIntOrNull() ?: 0,
@@ -186,31 +197,22 @@ fun HostProfileScreen(profileId: String?, connection: DshConnection, onBack: () 
             )
             OutlinedTextField(
                 value = url, onValueChange = { url = it },
-                label = { Text("服务器地址（首次连接仅需地址）") },
-                placeholder = { Text("192.168.1.100:8787 或你的内网穿透域名") },
+                label = { Text("服务器地址") },
+                placeholder = { Text("如 192.168.1.100:8787 或公网/穿透域名（无需填 /m/api）") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
-            // 已记录的设备信息（只读）：重连校验依据
-            original?.let { p ->
-                if (p.deviceModel.isNotBlank() || p.deviceMac.isNotBlank()) {
-                    Card(Modifier.fillMaxWidth(), shape = DshShape.card) {
-                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text("已记录设备", style = MaterialTheme.typography.titleSmall)
-                            Text(
-                                if (p.deviceModel.isNotBlank()) "机型：${p.deviceModel}" else "机型：未记录",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Text(
-                                if (p.deviceMac.isNotBlank()) "MAC：${p.deviceMac}（重连时校验一致才恢复连接）" else "MAC：未记录",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-            }
+            OutlinedTextField(
+                value = accessToken, onValueChange = { accessToken = it },
+                label = { Text("访问口令（可选）") },
+                placeholder = { Text("填入 PC 端配置的访问口令即可连接") },
+                singleLine = true,
+                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Password,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            )
 
             Card(Modifier.fillMaxWidth(), shape = DshShape.card) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
