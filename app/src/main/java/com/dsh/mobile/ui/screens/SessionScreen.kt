@@ -66,6 +66,7 @@ import com.dsh.mobile.data.*
 import com.dsh.mobile.ui.components.MarkdownText
 import com.dsh.mobile.ui.components.MusicPlayer
 import com.dsh.mobile.ui.components.MusicPlayerCard
+import com.dsh.mobile.ui.components.ReplySpeaker
 import com.dsh.mobile.ui.components.firstMp3Url
 import com.dsh.mobile.ui.theme.*
 import kotlinx.coroutines.CoroutineScope
@@ -814,6 +815,33 @@ fun SessionScreen(
     // 快捷指令条（T5）：SettingsStore 持久化，未配置时注入内置默认 4 条
     val settingsStore = remember { SettingsStore(context) }
     val quickPrompts by settingsStore.quickPrompts.collectAsState(initial = defaultQuickPrompts())
+    // T8 语音播报开关（持久化）：AI 回复完成后用系统 TTS 自动朗读
+    val autoSpeak by settingsStore.autoSpeak.collectAsState(initial = true)
+    // 上一轮的流式 assistant key 集合：用于检测「流式→完成」的转折（一次完成只播报一次）
+    var prevStreamingKeys by remember { mutableStateOf<Set<String>?>(null) }
+
+    // T8 自动朗读：每当有一条 assistant 回复「从流式转完成」，就用系统 TTS 播报出来。
+    // 关键：含 mp3 直链的回复会走音乐卡片自动播放，直接跳过朗读（避免语音盖住音乐）。
+    LaunchedEffect(items, autoSpeak) {
+        val curStreaming = items.mapNotNull { if (it is ChatItem.Assistant && it.streaming) it.key else null }.toHashSet()
+        val prev = prevStreamingKeys
+        if (prev != null && prev != curStreaming && autoSpeak) {
+            val finished = prev - curStreaming
+            if (finished.isNotEmpty()) {
+                val done = items.lastOrNull { it.key in finished } as? ChatItem.Assistant
+                if (done != null && done.text.isNotBlank() && firstMp3Url(done.text) == null) {
+                    ReplySpeaker.speak(context, done.text)
+                }
+            }
+        }
+        prevStreamingKeys = curStreaming
+    }
+
+    // 离开会话页时停止朗读（避免读一半被切断）
+    DisposableEffect(Unit) {
+        onDispose { ReplySpeaker.stop() }
+    }
+
     var quickEditDialog by remember { mutableStateOf(false) }
     var quickEditText by remember { mutableStateOf("") }
     var modelDialog by remember { mutableStateOf(false) }
@@ -1036,6 +1064,8 @@ fun SessionScreen(
         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         sending = true
         actionError = null
+        // T8：用户发送新指令，先打断当前朗读，避免与下一轮回复冲突
+        ReplySpeaker.stop()
         // 捕获本次发送模式：await 期间用户切走开关不影响已发起请求的语义
         val isSteer = steerMode
         if (isSteer) {
@@ -1416,6 +1446,17 @@ fun SessionScreen(
                     },
                 )
             }
+            // T8 语音播报开关：AI 回复自动朗读；关闭立即停止当前朗读
+            FilterChip(
+                selected = autoSpeak,
+                onClick = {
+                    val target = !autoSpeak
+                    scope.launch { settingsStore.setAutoSpeak(target) }
+                    if (!target) ReplySpeaker.stop()
+                },
+                label = { Text(if (autoSpeak) "🔊 朗读" else "🔊 静音") },
+                modifier = Modifier.height(32.dp),
+            )
             IconButton(
                 onClick = {
                     quickEditText = quickPrompts.joinToString("\n")

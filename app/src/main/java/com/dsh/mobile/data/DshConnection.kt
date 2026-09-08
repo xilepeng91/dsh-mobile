@@ -43,7 +43,7 @@ fun normalizeApiBaseUrl(raw: String): String {
  * - 应答:     POST /m/api/respond body = {rpcId, kind, sessionId, answers|approvalId+outcome}
  * - 事件流:   GET  /m/api/events (SSE)，data = {type,…} 移动协议信封，
  *            type ∈ session/event | mobile/frame | agent/status | session/context | mobile/queue
- * 其余（工作区/目录/技能/mcp/vault 等）仍走 /m/api/compat/* 上游透传。
+ * 其余（工作区/目录/技能/mcp/vault 等）走 /m/api/compat 上游透传。
  */
 class DshConnection(private val appContext: Context? = null) {
 
@@ -491,7 +491,7 @@ class DshConnection(private val appContext: Context? = null) {
 
         // 方案 C(服务器兼容网关)：统一定到 /m/api/compat/rpc，服务端读信封里的 method 派发
         val request = Request.Builder()
-            .url("$baseUrl/api/compat/rpc")
+            .url("$baseUrl/compat/rpc")
             .post(body)
             .build()
 
@@ -547,7 +547,7 @@ class DshConnection(private val appContext: Context? = null) {
                     add(buildJsonObject {
                         put("id", a.id)
                         put("selected", buildJsonArray { a.selected.forEach { add(it) } })
-                        a.custom?.let { put("custom", it) })
+                        a.custom?.let { put("custom", it) }
                     })
                 }
             })
@@ -821,7 +821,7 @@ class DshConnection(private val appContext: Context? = null) {
             val text = withContext(Dispatchers.IO) {
                 val encoded = java.net.URLEncoder.encode(path, "UTF-8")
                 val request = Request.Builder()
-                    .url("$baseUrl/api/compat/remote-access/fs/list?path=$encoded")
+                    .url("$baseUrl/compat/remote-access/fs/list?path=$encoded")
                     .get()
                     .build()
                 unaryClient.newCall(request).execute().use { resp ->
@@ -846,7 +846,7 @@ class DshConnection(private val appContext: Context? = null) {
             val text = withContext(Dispatchers.IO) {
                 val encoded = java.net.URLEncoder.encode(path, "UTF-8")
                 val request = Request.Builder()
-                    .url("$baseUrl/api/compat/remote-access/fs/list?path=$encoded")
+                    .url("$baseUrl/compat/remote-access/fs/list?path=$encoded")
                     .get()
                     .build()
                 unaryClient.newCall(request).execute().use { resp ->
@@ -880,7 +880,7 @@ class DshConnection(private val appContext: Context? = null) {
             val text = withContext(Dispatchers.IO) {
                 val encoded = java.net.URLEncoder.encode(path, "UTF-8")
                 val request = Request.Builder()
-                    .url("$baseUrl/api/compat/remote-access/fs/read?path=$encoded")
+                    .url("$baseUrl/compat/remote-access/fs/read?path=$encoded")
                     .get()
                     .build()
                 unaryClient.newCall(request).execute().use { resp ->
@@ -904,7 +904,7 @@ class DshConnection(private val appContext: Context? = null) {
         return try {
             val text = withContext(Dispatchers.IO) {
                 val request = Request.Builder()
-                    .url("$baseUrl/api/compat/remote-access/mcp/list")
+                    .url("$baseUrl/compat/remote-access/mcp/list")
                     .get()
                     .build()
                 unaryClient.newCall(request).execute().use { resp ->
@@ -930,7 +930,7 @@ class DshConnection(private val appContext: Context? = null) {
     /** 插件 mcp/resources/list（M3）：MCP 资源能力清册；失败/不可用 → 空列表 */
     suspend fun mcpResources(): List<McpResourceServer> {
         return try {
-            val text = mcpGetText("/api/compat/remote-access/mcp/resources/list")
+            val text = mcpGetText("/compat/remote-access/mcp/resources/list")
             if (text.isBlank()) emptyList() else parseMcpResources(json.parseToJsonElement(text))
         } catch (e: Exception) {
             emptyList()
@@ -940,7 +940,7 @@ class DshConnection(private val appContext: Context? = null) {
     /** 插件 mcp/prompts/list（M3）：MCP 提示词能力清册；失败/不可用 → 空列表 */
     suspend fun mcpPrompts(): List<McpPromptServer> {
         return try {
-            val text = mcpGetText("/api/compat/remote-access/mcp/prompts/list")
+            val text = mcpGetText("/compat/remote-access/mcp/prompts/list")
             if (text.isBlank()) emptyList() else parseMcpPrompts(json.parseToJsonElement(text))
         } catch (e: Exception) {
             emptyList()
@@ -954,7 +954,7 @@ class DshConnection(private val appContext: Context? = null) {
             arguments?.let { body.put("arguments", JSONObject(it)) }
             val text = withContext(Dispatchers.IO) {
                 val request = Request.Builder()
-                    .url("$baseUrl/api/compat/remote-access/mcp/prompts/render")
+                    .url("$baseUrl/compat/remote-access/mcp/prompts/render")
                     .post(body.toString().toRequestBody("application/json".toMediaType()))
                     .build()
                 unaryClient.newCall(request).execute().use { resp ->
@@ -974,7 +974,7 @@ class DshConnection(private val appContext: Context? = null) {
      */
     suspend fun vaultStatus(): VaultStatus? {
         return try {
-            val text = postVaultRoute("/api/compat/credentials.status", "{}")
+            val text = postVaultRoute("/compat/credentials.status", "{}")
             if (text == null) null else parseVaultStatus(text)
         } catch (e: Exception) {
             null
@@ -988,7 +988,7 @@ class DshConnection(private val appContext: Context? = null) {
      */
     suspend fun vaultUnlock(digest: String): VaultUnlockResult? {
         val text = try {
-            postVaultRoute("/api/compat/credentials.unlock", JSONObject().put("digest", digest).toString())
+            postVaultRoute("/compat/credentials.unlock", JSONObject().put("digest", digest).toString())
         } catch (e: Exception) {
             return null
         } ?: return null
