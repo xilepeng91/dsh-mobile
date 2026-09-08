@@ -14,8 +14,8 @@ import javax.net.ssl.SSLSocketFactory
 data class DiagStep(val name: String, val ok: Boolean, val detail: String?, val elapsedMs: Long)
 
 suspend fun runDiagnostics(profile: HostProfile): List<DiagStep> = withContext(Dispatchers.IO) {
-    // 防御性规范化：与连接/保存共用同一 URL 语义，避免 URI(url) 对无协议地址直接失败
-    val normalized = profile.copy(url = normalizeBaseUrl(profile.url))
+    // 防御性规范化：与连接/保存共用同一 URL 语义（以 /m/api 结尾），避免 URI(url) 对无协议地址直接失败
+    val normalized = profile.copy(url = normalizeApiBaseUrl(profile.url))
     val steps = mutableListOf<DiagStep>()
     val uri = runCatching { URI(normalized.url) }.getOrNull()
     val host = uri?.host ?: ""
@@ -55,7 +55,8 @@ suspend fun runDiagnostics(profile: HostProfile): List<DiagStep> = withContext(D
         val rpcId = "diag-" + java.util.UUID.randomUUID()
         val body = """{"type":"client-request","rpcId":"$rpcId","method":"host.describe","payload":{}}"""
             .toRequestBody("application/json".toMediaType())
-        val req = Request.Builder().url(normalized.url + "/api/host.describe").post(body).build()
+        // 方案 C：host.describe 走 /m/api/compat/rpc（方法在信封体内，URL 固定），服务端读 method 派发
+        val req = Request.Builder().url(normalized.url + "/api/compat/rpc").post(body).build()
         unary.newCall(req).execute().use { resp ->
             val text = resp.body?.string() ?: ""
             if (!resp.isSuccessful) throw IllegalStateException("HTTP ${resp.code}")

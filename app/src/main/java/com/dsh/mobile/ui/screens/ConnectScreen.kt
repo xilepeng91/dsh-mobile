@@ -1,14 +1,11 @@
 package com.dsh.mobile.ui.screens
 
-import android.app.Activity
 import android.content.Intent
 import android.os.Build
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -21,17 +18,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.dsh.mobile.R
 import androidx.core.content.ContextCompat
-import com.dsh.mobile.DshApplication
 import com.dsh.mobile.data.*
 import com.dsh.mobile.service.DshConnectionService
 import com.dsh.mobile.ui.theme.DshBrand
 import com.dsh.mobile.ui.theme.DshSuccess
 import com.dsh.mobile.ui.theme.DshShape
-import com.journeyapps.barcodescanner.CaptureActivity
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -136,40 +130,6 @@ fun ConnectScreen(
         onConnectedActions()
     }
 
-    // —— 扫码：解析结果 → 新建或更新配置并连接 ——
-    val scannerLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult(),
-    ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            val scanned = result.data?.getStringExtra("SCAN_RESULT")?.trim().orEmpty()
-            if (scanned.isNotEmpty()) {
-                val existing = profiles.firstOrNull { it.url == scanned }
-                val profile = existing
-                    ?: HostProfile(
-                        id = java.util.UUID.randomUUID().toString(),
-                        remark = "",
-                        url = scanned,
-                    )
-                scope.launch { settingsStore.upsertProfile(profile) }
-                connectTo(profile)
-            }
-        }
-    }
-
-    val cameraPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted ->
-        if (granted) {
-            scannerLauncher.launch(Intent(context, CaptureActivity::class.java))
-        } else {
-            Toast.makeText(context, "需要相机权限才能扫码连接", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    fun startScan() {
-        cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
-    }
-
     // —— 自动连接 ——
     LaunchedEffect(Unit) {
         settingsStore.ensureMigrated()
@@ -179,27 +139,6 @@ fun ConnectScreen(
             connectTo(auto)
         }
     }
-
-    // —— 配对握手结果提示（Toast 需主线程，LaunchedEffect 默认运行于主线程）——
-    LaunchedEffect(Unit) {
-        val app = context.applicationContext as? DshApplication ?: return@LaunchedEffect
-        app.pairingCoordinator.events.collect { msg ->
-            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-        }
-    }
-
-    // —— 首次配对对话框（v1.8.0：配对码优先；「等待 PC 确认」旧式兜底）——
-    val appCtx = context.applicationContext as? DshApplication
-    var pairCode by remember { mutableStateOf("") }
-    var pairError by remember { mutableStateOf<String?>(null) }
-    var pairBusy by remember { mutableStateOf(false) }
-    var pairDismissedFor by remember { mutableStateOf<String?>(null) }
-    val awaitingId = appCtx?.pairingCoordinator?.awaitingDecision?.collectAsState(initial = null)?.value
-    LaunchedEffect(awaitingId) {
-        // 决策清除（断线/配对完成）后复位「本会话已关」标记，下次连接可再弹
-        if (awaitingId == null) pairDismissedFor = null
-    }
-    val showPairDialog = awaitingId != null && pairDismissedFor != awaitingId
 
     Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
         // 错误横幅（spec §6：错误码 → 原因 → 建议；不可恢复错误标注已停止重连）
@@ -248,8 +187,8 @@ fun ConnectScreen(
                         )
                     }
                     Spacer(Modifier.weight(1f))
-                    IconButton(onClick = { startScan() }) {
-                        Icon(Icons.Default.QrCodeScanner, contentDescription = "扫码连接", tint = DshBrand)
+                    IconButton(onClick = { onEditHost(null) }) {
+                        Icon(Icons.Default.Add, contentDescription = "添加主机", tint = DshBrand)
                     }
                 }
                 Spacer(Modifier.height(10.dp))
@@ -330,7 +269,7 @@ fun ConnectScreen(
             if (sortedProfiles.isEmpty()) {
                 item {
                     Text(
-                        "还没有设备记录：首次连接只需输入地址，连接后会记录设备机型",
+                        "还没有设备记录：点「添加主机」，填写服务器地址与访问口令即可连接",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -368,10 +307,10 @@ fun ConnectScreen(
                                             color = DshBrand,
                                         )
                                     }
-                                    if (p.deviceMac.isNotBlank()) {
+                                    if (p.channelToken.isNotBlank()) {
                                         Spacer(Modifier.width(6.dp))
                                         Text(
-                                            "已验证",
+                                            "已设口令",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = DshSuccess,
                                         )
@@ -436,7 +375,7 @@ fun ConnectScreen(
             AlertDialog(
                 onDismissRequest = { pendingDelete = null },
                 title = { Text("删除设备记录") },
-                text = { Text("将删除「${deviceTitle(target)}」的连接记录与通道令牌，不影响电脑端数据。") },
+                text = { Text("将删除「${deviceTitle(target)}」的连接记录与访问口令，不影响电脑端数据。") },
                 confirmButton = {
                     TextButton(onClick = {
                         scope.launch {
@@ -452,57 +391,5 @@ fun ConnectScreen(
             )
         }
 
-        // 首次配对：配对码优先（PC 端「设置 → 远程控制 → 生成配对码」）
-        if (showPairDialog) {
-            AlertDialog(
-                onDismissRequest = { pairDismissedFor = awaitingId },
-                title = { Text("首次配对") },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            "在 PC 端 DSH「设置 → 远程控制」点「生成配对码」，把 6 位配对码填到这里即完成配对（无需电脑端确认）。",
-                        )
-                        OutlinedTextField(
-                            value = pairCode,
-                            onValueChange = { v ->
-                                pairCode = v.filter { it.isDigit() }.take(6)
-                                pairError = null
-                            },
-                            label = { Text("6 位配对码") },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        pairError?.let {
-                            Text(
-                                it,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error,
-                            )
-                        }
-                    }
-                },
-                confirmButton = {
-                    TextButton(
-                        enabled = pairCode.length == 6 && !pairBusy,
-                        onClick = {
-                            scope.launch {
-                                pairBusy = true
-                                val r = appCtx?.pairingCoordinator?.pairWithCode(pairCode)
-                                    ?: PairingCoordinator.PairCodeResult(false, "初始化失败")
-                                if (!r.ok) pairError = r.message
-                                pairBusy = false
-                            }
-                        },
-                    ) { Text(if (pairBusy) "配对中…" else "配对") }
-                },
-                dismissButton = {
-                    TextButton(onClick = {
-                        pairDismissedFor = awaitingId
-                        scope.launch { appCtx?.pairingCoordinator?.chooseLegacyHandshake() }
-                    }) { Text("等待 PC 确认") }
-                },
-            )
-        }
     }
 }

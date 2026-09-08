@@ -35,7 +35,11 @@ data class HostProfile(
     val lastUsedAt: Long = 0,
     val lastErrorCode: String? = null,
     val paired: Boolean = false,
-    /** 远程通道 token（配对通过后由 pair/check 下发；密文落盘，请求时以 Bearer 头携带） */
+    /**
+     * 访问口令（= 服务端 authToken）。手填地址 + 口令即可连接，无需扫码/配对握手；
+     * 密文落盘，请求时以 x-mobile-token 头携带（OkHttpClientFactory 注入）。
+     * paired 置 true 即通过 App 门禁（AppNavigation 依据 paired 放行首页）。
+     */
     val channelToken: String = "",
     /** 主机机型（device/info 抓取；设备记录列表展示用，不再展示公网 IP） */
     val deviceModel: String = "",
