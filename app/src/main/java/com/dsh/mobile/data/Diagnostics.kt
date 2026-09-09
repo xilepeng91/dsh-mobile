@@ -49,14 +49,11 @@ suspend fun runDiagnostics(profile: HostProfile): List<DiagStep> = withContext(D
         }
     }
 
-    // 4. host.describe 版本探测
+    // 4. 版本探测：GET /m/api/bootstrap（与主连接探测同源，返回 plugin.version）。
+    //    不能用 compat/rpc 的 host.describe——旧协议适配路由差异大，且 baseUrl 已以 /m/api 结尾再拼 /api 会 404。
     steps += timed("版本探测") {
         val (unary, _) = OkHttpClientFactory.build(normalized)
-        val rpcId = "diag-" + java.util.UUID.randomUUID()
-        val body = """{"type":"client-request","rpcId":"$rpcId","method":"host.describe","payload":{}}"""
-            .toRequestBody("application/json".toMediaType())
-        // 方案 C：host.describe 走 /m/api/compat/rpc（方法在信封体内，URL 固定），服务端读 method 派发
-        val req = Request.Builder().url(normalized.url + "/api/compat/rpc").post(body).build()
+        val req = Request.Builder().url(normalized.url + "/bootstrap").get().build()
         unary.newCall(req).execute().use { resp ->
             val text = resp.body?.string() ?: ""
             if (!resp.isSuccessful) throw IllegalStateException("HTTP ${resp.code}")
